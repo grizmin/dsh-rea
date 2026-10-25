@@ -4,6 +4,20 @@ Notable changes to `dsh-rea`, the DeepSeek Harness adapter for
 [REA](https://github.com/morluto/rea). This adapter pins an exact REA release, so the
 upstream version is part of every entry.
 
+## 0.5.1 — fork tooling
+
+Fork-only release. No upstream-bound changes; `rea-agents` stays pinned at **6.7.0**.
+
+### Added
+
+- `scripts/setup-rea-tools.ps1`, a Windows toolchain bootstrapper for this fork. It
+  installs the Ghidra 12.1.4 / Temurin JDK 21 / JADX 0.7.1 / WABT 1.0.42 / Rizin /
+  objdump providers REA drives into one self-contained root, reads the REA version from
+  the `rea-agents` pin in `package.json`, and prints the plugin config block to paste.
+- `test/toolchain.test.mjs`, which asserts the script's provider pins against the
+  *installed* `rea-agents` release, so a REA bump fails the suite until the script is
+  updated to match.
+
 ## 0.5.0 — REA 6.7.0
 
 Pins `rea-agents` at **6.7.0**, up from `6.4.0`. REA 6.6.0 was tagged upstream but never

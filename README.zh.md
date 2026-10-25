@@ -111,6 +111,33 @@ github:JeremyWangCY/dsh-rea
 
 Node 支持范围：`^22.19.0 || ^24.11.0 || >=26.0.0`，不支持 23/25。插件激活不安装/升级运行时或分析引擎，不修改无关审批/preset 设置。自动重连关闭：新 REA 进程会丢失当前目标/provider/保留证据，应断线后显式重载。
 
+### Windows 工具链（grizmin fork）
+
+仅供本 fork 使用的便利工具，不属于上游 dsh-rea。插件激活不安装任何东西。在 Windows 上，`scripts/setup-rea-tools.ps1` 会把 REA 驱动的分析引擎下载到一个自包含目录（默认 `C:\re\tools`），并打印可直接粘贴到上方配置中的配置块：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-rea-tools.ps1
+# 选项：-Root D:\re\tools  -SkipAndroid  -SkipIda  -SkipCutter
+#       -InstallReaCli（随后可跑 `rea doctor --json`）  -Force
+```
+
+不写入系统 PATH，不需要管理员权限；删除该目录即卸载。脚本从本仓库 `package.json` 的 `rea-agents` 版本读取 `$REA_VER`，因此它拉取的 Cutter 桥接插件始终与插件实际桥接的 REA 一致——只有在需要为别的 REA 版本准备工具时才用 `-ReaVersion <x.y.z>` 覆盖。
+
+| 组件 | 固定版本 | 环境变量 |
+|---|---|---|
+| Ghidra | 12.1.4（精确） | `GHIDRA_INSTALL_DIR` |
+| Temurin JDK | 21 | `JAVA_HOME` |
+| objdump | w64devkit | `REA_OBJDUMP_COMMAND` |
+| Rizin | 最新便携版 | `REA_RIZIN_COMMAND` |
+| WABT | 1.0.42 | `REA_WABT_BIN_DIRECTORY` |
+| adb / apktool | 最新 | `PATH` |
+| jadx-headless-mcp | 0.7.1（校验 sha256） | `REA_JADX_MCP_JAR` |
+| Cutter + `rea_bridge.py` | 与 REA 版本一致 | Cutter 用户插件目录 |
+
+Ghidra、JDK、JADX 与 WABT 的版本由 `test/toolchain.test.mjs` 针对**已安装的** `rea-agents` 校验，因此升级 REA 依赖会让该测试失败，直到脚本同步更新。也就是说一次 REA 升级是两处改动：`package.json` 与脚本中的版本固定值。
+
+故意不覆盖：IDA Pro 与 `ida-pro-mcp`（需授权，单独安装——脚本只生成 `ida-mcp.json` 骨架）、JEB（`REA_JEB_MCP_URL`）、Kuna（由调用方提供，设置 `REA_KUNA_COMMAND`）。TShark、sigrok 与 GDB 会话在 REA 中仍仅支持 Linux。Cutter 相关工具连接的是**已在运行且加载了桥接插件**的 Cutter，使用前请先启动 Cutter。
+
 ## native 与 PTC
 
 两种方式都完整注册全部上游工具。PTC 是 DSH 的工具/agent preset 呈现方式，插件不擅自把其他工具全切换为 PTC。

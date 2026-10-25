@@ -111,6 +111,33 @@ The bundle inserts the host plugin. Defaults load the catalog on demand and leav
 
 Supported Node range: `^22.19.0 || ^24.11.0 || >=26.0.0`; 23/25 are unsupported. No runtime or analysis engine is installed/upgraded by plugin activation. Existing unrelated approval/preset settings are not changed. Automatic reconnection is disabled deliberately: a new REA process loses target/provider/retained Evidence state; reload explicitly after a disconnect.
 
+### Windows toolchain (grizmin fork)
+
+Fork-specific convenience tooling; not part of upstream dsh-rea. Plugin activation installs nothing. On Windows, `scripts/setup-rea-tools.ps1` fetches the analysis engines REA drives into one self-contained root (default `C:\re\tools`) and prints the config block to paste above:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-rea-tools.ps1
+# options: -Root D:\re\tools  -SkipAndroid  -SkipIda  -SkipCutter
+#          -InstallReaCli (then `rea doctor --json`)  -Force
+```
+
+Nothing is added to the system PATH and nothing needs admin rights; delete the root to uninstall. The script reads `$REA_VER` from the `rea-agents` pin in this repository's `package.json`, so the Cutter bridge plugin it fetches always matches the REA the plugin actually bridges — override with `-ReaVersion <x.y.z>` only to prepare tools for a different REA release.
+
+| Component | Pin | Environment variable |
+|---|---|---|
+| Ghidra | 12.1.4 (exact) | `GHIDRA_INSTALL_DIR` |
+| Temurin JDK | 21 | `JAVA_HOME` |
+| objdump | w64devkit | `REA_OBJDUMP_COMMAND` |
+| Rizin | latest portable | `REA_RIZIN_COMMAND` |
+| WABT | 1.0.42 | `REA_WABT_BIN_DIRECTORY` |
+| adb / apktool | latest | `PATH` |
+| jadx-headless-mcp | 0.7.1 (sha256 checked) | `REA_JADX_MCP_JAR` |
+| Cutter + `rea_bridge.py` | matches the REA pin | Cutter user plugin dir |
+
+The Ghidra, JDK, JADX and WABT pins are asserted by `test/toolchain.test.mjs` against the *installed* `rea-agents` release, so bumping the REA dependency fails that test until the script is updated to match. A REA bump is therefore two edits: `package.json` and the script's pins.
+
+Not covered, by design: IDA Pro and `ida-pro-mcp` (licensed, separate install — the script only scaffolds `ida-mcp.json`), JEB (`REA_JEB_MCP_URL`), and Kuna (caller-supplied; set `REA_KUNA_COMMAND`). TShark, sigrok and GDB sessions remain Linux-only in REA. Cutter's tools attach to an already-running Cutter with the bridge plugin loaded, so start Cutter before using them.
+
 ### Native versus PTC
 
 All tools remain registered in both modes. PTC belongs to DSH's tools/agent preset, not REA; the plugin does not switch every other tool into PTC.
