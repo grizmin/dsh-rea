@@ -4,6 +4,14 @@ Notable changes to `dsh-rea`, the DeepSeek Harness adapter for
 [REA](https://github.com/morluto/rea). This adapter pins an exact REA release, so the
 upstream version is part of every entry.
 
+## Unreleased
+
+### Added
+
+- `/rea list`: every category with its description, tool count and size, the loaded ones
+  marked. `/rea status` only named categories and sizes, which does not say what is
+  inside one; the status line now points at `/rea list`.
+
 ## 0.6.0 — category-scoped exposure
 
 ### Added
