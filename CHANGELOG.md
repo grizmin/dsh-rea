@@ -4,7 +4,7 @@ Notable changes to `dsh-rea`, the DeepSeek Harness adapter for
 [REA](https://github.com/morluto/rea). This adapter pins an exact REA release, so the
 upstream version is part of every entry.
 
-## Unreleased
+## 0.6.1 — /rea list
 
 ### Added
 
