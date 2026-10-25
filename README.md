@@ -182,6 +182,23 @@ Then update the version, tool count, prompt-argument count and byte figures in
 count itself, so a catalog change surfaces as a failure in the deep comparison rather
 than as a silently stale document.
 
+## Branching policy (grizmin fork)
+
+This fork keeps the upstream PR and its own tooling on separate branches. Mixing them
+puts fork-only files into the pull request, which is what the split exists to prevent.
+
+| Change | Branch | Base |
+|---|---|---|
+| Anything intended for upstream | a topic branch | `upstream/master` |
+| Fork-only tooling, docs and releases | `master` only | the merged upstream line |
+
+`rea-6.7.0` is the open upstream PR branch. It is pinned at one commit and must never
+gain fork-only content; a change that belongs upstream goes on a fresh topic branch off
+`upstream/master` instead. `master` is the fork's own line: it carries
+`scripts/setup-rea-tools.ps1` and its pin test, and it is tagged for fork releases
+(`v0.5.1`). Do not reference fork-only files from `PR.md` or from CHANGELOG entries that
+belong to an upstream release.
+
 ## License
 
 This adapter is MIT. REA is by morluto and contributors, MIT, included as a pinned dependency with its upstream license. Third-party tools retain their own licenses.
