@@ -19,6 +19,9 @@ upstream version is part of every entry.
 - Config: `defaultCategories`, `keywordCategories` (default `[native]`), `modelLoader`,
   `loaderMaxPerCall`, `alwaysDeny`. An unknown category stops activation and names the
   field.
+- `/rea list`: every category with its description, tool count and size, the loaded ones
+  marked. `/rea status` only named categories and sizes, which does not say what is
+  inside one; the status line now points at `/rea list`.
 - `verification/schema-measurement.json` gained `byCategory` sizes;
   `test/categories.test.mjs` fails if an REA release leaves a tool in `other`.
 
