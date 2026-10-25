@@ -4,6 +4,36 @@ Notable changes to `dsh-rea`, the DeepSeek Harness adapter for
 [REA](https://github.com/morluto/rea). This adapter pins an exact REA release, so the
 upstream version is part of every entry.
 
+## Unreleased
+
+### Added
+
+- **Category-scoped exposure.** Every REA tool belongs to one of 12 categories, and an
+  agent is hidden, partly revealed or fully revealed. New `/rea on <cats>` and
+  `/rea add <cats>`; `/rea status` reports loaded categories and what the rest would
+  cost. A bare `/rea` reveals `defaultCategories`, which defaults to `[all]`, so existing
+  setups behave as before.
+- **`rea_load` / `rea_unload` model tools** (lazy exposure, `modelLoader`): the model
+  loads categories for its own session, capped at `loaderMaxPerCall` new categories per
+  call.
+- Config: `defaultCategories`, `keywordCategories` (default `[native]`), `modelLoader`,
+  `loaderMaxPerCall`, `alwaysDeny`. An unknown category stops activation and names the
+  field.
+- `verification/schema-measurement.json` gained `byCategory` sizes;
+  `test/categories.test.mjs` fails if an REA release leaves a tool in `other`.
+
+### Changed
+
+- A keyword unlock (opt-in) reveals `keywordCategories` instead of the whole catalog.
+- History replay understands `/rea on|add` and successful `rea_load`/`rea_unload` calls.
+
+### Fixed
+
+- Releasing a category mask no longer re-masks the agent from inside the release. The
+  real registry emits `tools/change` from a mask's disposer; the gate's re-entrancy guard
+  did not cover that call, so widening a partial view leaked the previous mask and kept
+  the newly revealed tools hidden.
+
 ## 0.5.1 — fork tooling
 
 Fork-only release. No upstream-bound changes; `rea-agents` stays pinned at **6.7.0**.
