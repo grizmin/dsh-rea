@@ -4,6 +4,39 @@ Notable changes to `dsh-rea`, the DeepSeek Harness adapter for
 [REA](https://github.com/morluto/rea). This adapter pins an exact REA release, so the
 upstream version is part of every entry.
 
+## 0.7.0 — REA 6.8.0, synced with upstream
+
+Brings the fork back in line with upstream `JeremyWangCY/dsh-rea` master (the merged
+PR #1, the async unlock-hook fix and REA 6.8.0) and carries the category feature as it
+stands in upstream PR #2.
+
+### Changed
+
+- **REA 6.8.0** (229 tools, skill v49). Compact MCP input schemas are the default
+  upstream, so the whole catalog is 273,264 bytes of model-side schema (was 775,022).
+  `native` is the largest category at 92,276 bytes.
+- The 22 tools REA 6.8.0 added are mapped into categories; none lands in `other`.
+- **`modelLoader` now defaults to `false`.** Set `modelLoader: true` to keep
+  `rea_load` / `rea_unload`.
+- A comma-separated request after `/rea on|add` (`/rea add logging, tests`) is
+  forwarded to the model instead of rejected as unknown categories.
+
+### Fixed
+
+- Releasing the gate (a plugin reload, e.g. a config edit) left every agent's mask
+  behind, so a later `/rea add` could report success while tools stayed hidden.
+- Closing the last revealed session left the REA skill registered.
+- `rea_load` said "Already loaded" when `alwaysDeny` refused the request.
+- `/rea list` and `/rea status` say when no REA tools are registered.
+- `alwaysDeny` under `exposure: always` is reported at activation instead of being
+  silently ignored.
+
+### Notes
+
+- Unit tests 169 (166 shared with upstream plus the fork's toolchain tests); the
+  toolchain pins (Ghidra 12.1.4, JDK 21, JADX 0.7.1, WABT 1.0.42) still match REA 6.8.0.
+- The `packageManager` pin is dropped so the lockfile stays identical to upstream's.
+
 ## 0.6.1 — /rea list
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "dsh-rea",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "exports": { ".": "./lib/index.js", "./client": "./lib/client.js", "./package.json": "./package.json" },
   "description": "Full upstream REA MCP tools and version-matched reverse-engineering skill for DeepSeek Harness, revealed on demand with /rea",
   "license": "MIT",
