@@ -42,7 +42,7 @@ test('launcher uses exact dependency without network package runner', async () =
  assert.equal(config.env.REA_TEST_VALUE,'explicit')
  assert.equal(config.reconnect.enabled,false)
 })
-test('original skill body and all six references are preserved', async () => {
+test('original skill body and all upstream references are preserved', async () => {
  const skill=await plugin.upstreamSkill()
  const raw=await readFile(skill.path,'utf8')
  const match=/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(raw)
@@ -52,7 +52,7 @@ test('original skill body and all six references are preserved', async () => {
  assert.deepEqual(skill.metadata,metadata.metadata)
  assert.equal(skill.resourceBase.path,plugin.upstreamPaths().skillDir)
  const refs=await readdir(join(skill.resourceBase.path,'references'))
- assert.equal(refs.filter(n=>n.endsWith('.md')).length,6)
+ assert.equal(refs.filter(n=>n.endsWith('.md')).length,7)
 })
 test('bundle patch inserts plugin with valid id/name', async () => {
  const pkg=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'))
@@ -169,7 +169,7 @@ test('category config defaults keep upstream behavior', () => {
   const config = plugin.Config({})
   assert.deepEqual(config.defaultCategories, ['all'])
   assert.deepEqual(config.keywordCategories, ['native'])
-  assert.equal(config.modelLoader, true)
+  assert.equal(config.modelLoader, false)
   assert.equal(config.loaderMaxPerCall, 3)
   assert.deepEqual(config.alwaysDeny, [])
   assert.throws(() => plugin.Config({ loaderMaxPerCall: 0 }))
@@ -216,19 +216,19 @@ test('defaultCategories must not be empty and alwaysDeny must not hide everythin
   await plugin.apply(applyCtx().ctx, plugin.Config({ defaultCategories: ['Native'], keywordCategories: [], alwaysDeny: ['capture'] }))
 })
 
-test('lazy exposure registers the loader tools and names the default categories', async () => {
+test('modelLoader true registers the loader tools, and the log names the default categories', async () => {
   const { ctx, state } = applyCtx()
-  await plugin.apply(ctx, plugin.Config({ defaultCategories: ['native', 'android'] }))
+  await plugin.apply(ctx, plugin.Config({ modelLoader: true, defaultCategories: ['native', 'android'] }))
   assert.deepEqual(state.tools.sort(), ['rea_load', 'rea_unload'])
   assert.ok(state.logs.some((line) => line.includes('reveals native, android')), state.logs.join('\n'))
 })
 
-test('modelLoader false and exposure always register no loader tools', async () => {
+test('the loader tools are off by default, and exposure always registers none even when on', async () => {
   const off = applyCtx()
-  await plugin.apply(off.ctx, plugin.Config({ modelLoader: false }))
+  await plugin.apply(off.ctx, plugin.Config({}))
   assert.deepEqual(off.state.tools, [])
   const always = applyCtx()
-  await plugin.apply(always.ctx, plugin.Config({ exposure: 'always' }))
+  await plugin.apply(always.ctx, plugin.Config({ exposure: 'always', modelLoader: true }))
   assert.deepEqual(always.state.tools, [])
 })
 
@@ -274,4 +274,17 @@ test('defaultCategories that alwaysDeny leaves nothing of is rejected, partial o
   )
   await plugin.apply(applyCtx().ctx, plugin.Config({ defaultCategories: ['native', 'capture'], alwaysDeny: ['capture'] }))
   await plugin.apply(applyCtx().ctx, plugin.Config({ defaultCategories: ['all'], alwaysDeny: ['capture'] }))
+})
+
+test('alwaysDeny under exposure always is reported, since nothing can mask it there', async () => {
+  const { ctx } = applyCtx()
+  const warnings = []
+  ctx.logger.warn = (text) => warnings.push(text)
+  await plugin.apply(ctx, plugin.Config({ exposure: 'always', alwaysDeny: ['capture'] }))
+  assert.ok(warnings.some((text) => /alwaysDeny/u.test(text) && /exposure: lazy/u.test(text)), warnings.join('\n'))
+  const quiet = applyCtx()
+  const none = []
+  quiet.ctx.logger.warn = (text) => none.push(text)
+  await plugin.apply(quiet.ctx, plugin.Config({ exposure: 'always' }))
+  assert.deepEqual(none, [])
 })

@@ -459,6 +459,39 @@ test('a history that only ever ran /rea status stays hidden but keyword hits sti
   const keyword = agentFor(h, 's2', [reaRun('status'), { type: 'user/message', data: message('decompile this dll') }])
   assert.equal(gate.gateOrRestore(keyword), false)
 })
+test('an async unlock hook that rejects is contained, never an unhandled rejection', async () => {
+  const h = harness(['mcp__rea__a'])
+  const unhandled = []
+  const onUnhandled = (error) => unhandled.push(error)
+  process.on('unhandledRejection', onUnhandled)
+  try {
+    const gate = new ReaVisibilityGate(h.ctx, 'rea', h.ctx.logger, async () => {
+      throw new Error('cannot get property "skills" without inject')
+    })
+    const agent = agentFor(h, 'session-1')
+    gate.gate(agent)
+    assert.equal(gate.unlock(agent), true)
+    // The host aborts on an unhandled rejection, so the guard must settle it.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.deepEqual(unhandled, [])
+    assert.equal(h.state.warnings.length, 1)
+    assert.match(h.state.warnings[0], /unlock hook failed/u)
+  } finally {
+    process.off('unhandledRejection', onUnhandled)
+  }
+})
+
+test('a synchronous unlock hook failure is logged and does not abort the unlock', () => {
+  const h = harness(['mcp__rea__a'])
+  const gate = new ReaVisibilityGate(h.ctx, 'rea', h.ctx.logger, () => {
+    throw new Error('boom')
+  })
+  const agent = agentFor(h, 'session-1')
+  gate.gate(agent)
+  assert.equal(gate.unlock(agent), true)
+  assert.equal(h.state.warnings.length, 1)
+  assert.match(h.state.warnings[0], /unlock hook failed/u)
+})
 
 // ---------------------------------------------------------------------------
 // Category-scoped reveal
@@ -904,4 +937,61 @@ test('replay: a PTC rea_unload hides, and a failed PTC call is ignored', () => {
 test('replay: /rea list changes nothing, like status', () => {
   assert.deepEqual(replay([reaRun(' on native'), reaRun(' list')]), { state: 'partial', categories: ['native'] })
   assert.equal(replay([reaRun(' list')]).state, 'hidden')
+})
+
+test('disposing the gate releases every mask it installed, so a reload starts clean', () => {
+  // Masks are restrictions on each agent's own scope, not on the plugin fiber,
+  // so nothing else releases them when the plugin reloads. A leaked mask keeps
+  // denying names the next gate later reveals.
+  const h = harness(SPREAD)
+  const handle = installGate(h.ctx, { serverName: 'rea', categoryOf: stubCategoryOf, alwaysDeny: ['capture'] })
+  const hidden = agentFor(h, 'hidden')
+  const partial = agentFor(h, 'partial')
+  const full = agentFor(h, 'full')
+  handle.gate.gate(hidden)
+  handle.gate.reveal(partial, ['native'])
+  handle.gate.reveal(full, ['all'])
+  assert.equal(h.state.live.size, 3)
+  handle.dispose()
+  assert.equal(h.state.live.size, 0)
+  assert.equal(handle.gate.maskedCount, 0)
+  // A tools/change after teardown must not re-mask anything.
+  h.ctx.emit('tools/change')
+  assert.equal(h.state.live.size, 0)
+})
+
+test('forgetting the last revealed agent fires onRelock so the skill is released', () => {
+  const { h, gate, hooks } = spreadGate()
+  const one = agentFor(h, 'one')
+  const two = agentFor(h, 'two')
+  const hidden = agentFor(h, 'hidden')
+  gate.gate(hidden)
+  gate.reveal(one, ['native'])
+  gate.reveal(two, ['all'])
+  hooks.length = 0
+  const seen = []
+  gate.forget(hidden)
+  assert.deepEqual(hooks, [], 'a hidden agent leaving is not a relock')
+  gate.forget(one)
+  seen.push(gate.unlockedCount)
+  assert.deepEqual(hooks, ['relock:one'])
+  gate.forget(two)
+  assert.deepEqual(hooks, ['relock:one', 'relock:two'])
+  assert.equal(gate.unlockedCount, 0)
+  assert.deepEqual(seen, [1])
+})
+
+test('revealing all again on a fully revealed agent leaves its alwaysDeny mask alone', () => {
+  const { h, gate } = spreadGate({ alwaysDeny: ['capture'] })
+  const agent = agentFor(h, 's1')
+  gate.reveal(agent, ['all'])
+  const mask = h.state.restrictions.get(agent.scope)
+  let changes = 0
+  const restrict = h.ctx.tools.restrict
+  h.ctx.tools.restrict = (filter) => { changes += 1; return restrict(filter) }
+  gate.reveal(agent, ['all'])
+  gate.setCategories(agent, ['all'])
+  assert.equal(changes, 0, 'no mask is re-installed')
+  assert.equal(h.state.restrictions.get(agent.scope), mask)
+  assert.equal(h.state.live.size, 1)
 })

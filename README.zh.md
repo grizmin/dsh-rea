@@ -1,8 +1,8 @@
 # dsh-rea
 
-把 [REA](https://github.com/morluto/rea) **6.7.0 原版 MCP 全量工具**及同版本 Skill 接入 DeepSeek Harness。[English](README.md)
+把 [REA](https://github.com/morluto/rea) **6.8.0 原版 MCP 全量工具**及同版本 Skill 接入 DeepSeek Harness。[English](README.md)
 
-**默认按需加载**：207 个工具的 schema 与 Skill 只在运行 `/rea` 之后才进入请求；在那之前它们不占上下文（native 模式实测 775,022 字节 / 每次请求，PTC 模式约 67 KB）。
+**默认按需加载**：229 个工具的 schema 与 Skill 只在运行 `/rea` 之后才进入请求；在那之前它们不占上下文（native 模式实测 273,264 字节 / 每次请求，PTC 模式约 171 KB）。
 
 ## 按需加载（v0.4 起的默认行为）
 
@@ -47,23 +47,23 @@
 ```
 ## 只加载需要的部分（类别）
 
-完整揭示整套目录，native 模式下每次请求要多付 775,022 字节，而大多数会话只用到其中一小块。每个上游工具恰好属于一个**类别**，会话可以只揭示自己需要的类别。以下数据来自 REA 6.7.0 的 `node verify/measure.mjs`：
+完整揭示整套目录，每次请求要多付 273,264 字节的模型侧 schema（REA 6.8.0 默认公布紧凑的输入 schema；设置 `REA_MCP_INPUT_SCHEMA_PROFILE=full` 会更大），而大多数会话只用到其中一小块。每个上游工具恰好属于一个**类别**，会话可以只揭示自己需要的类别。以下数据来自 REA 6.8.0 的 `node verify/measure.mjs`：
 
 | 类别 | 工具数 | 模型侧 schema 字节 |
 |---|---:|---:|
-| `native` | 62 | 84,761 |
-| `android` | 31 | 28,028 |
-| `apple` | 11 | 8,513 |
-| `managed` | 5 | 35,315 |
-| `web` | 27 | 287,234 |
-| `wasm` | 2 | 17,795 |
-| `dynamic` | 24 | 52,351 |
-| `providers` | 7 | 6,393 |
-| `firmware` | 8 | 11,861 |
-| `capture` | 6 | 10,194 |
-| `reconstruction` | 24 | 232,369 |
+| `native` | 76 | 92,276 |
+| `android` | 32 | 23,073 |
+| `apple` | 13 | 11,423 |
+| `managed` | 8 | 13,301 |
+| `web` | 28 | 46,094 |
+| `wasm` | 2 | 3,625 |
+| `dynamic` | 24 | 29,218 |
+| `providers` | 7 | 6,020 |
+| `firmware` | 9 | 15,453 |
+| `capture` | 6 | 8,207 |
+| `reconstruction` | 24 | 24,344 |
 
-各行之和比整套目录少约 200 字节（JSON 数组的标点）。`web` 与 `reconstruction` 最大；`native` 是覆盖面最广的二进制分析族。任何规则都没覆盖的新名字会落进 `other`，它和别的类别一样可加载；`test/categories.test.mjs` 会在 REA 升级后仍有工具落在那里时失败。
+各行之和比整套目录少约 200 字节（JSON 数组的标点）。`native` 是覆盖面最广的二进制分析族，也是最大的一个，所以只用 native 的会话大约只带整套目录的 34%（少约 66%）。任何规则都没覆盖的新名字会落进 `other`，它和别的类别一样可加载；`test/categories.test.mjs` 会在 REA 升级后仍有工具落在那里时失败。
 
 ```text
 /rea                       揭示默认类别（不收窄就是全部）
@@ -77,9 +77,9 @@
 
 含未知类别的列表会被整体拒绝，而不是只应用一半；`/rea on this binary` 仍然是一条请求（出现不是类别的词，整段就当请求）。
 
-**模型可以自己加载类别。** lazy 模式下插件会注册两个小工具 `rea_load({ categories })` 与 `rea_unload()`，名字不带 `mcp__rea__` 前缀，所以门禁不会把它们藏起来。`rea_load` 只对调用它的会话生效，一次最多新增 `loaderMaxPerCall`（默认 3）个类别，要加载的都已加载时什么都不做，并返回这次新增了多少工具、多少 KB。加载会改变请求前缀并造成一次 prompt 缓存未命中，所以工具描述会提醒模型每个任务只加载一次。用 `modelLoader: false` 可关闭。
+**模型可以自己加载类别（需要显式开启）。** 设置 `modelLoader: true`（仅 lazy 模式）后，插件会注册两个小工具 `rea_load({ categories })` 与 `rea_unload()`，名字不带 `mcp__rea__` 前缀，所以门禁不会把它们藏起来。`rea_load` 只对调用它的会话生效，一次最多新增 `loaderMaxPerCall`（默认 3）个类别，要加载的都已加载时什么都不做，并返回这次新增了多少工具、多少 KB。加载会改变请求前缀并造成一次 prompt 缓存未命中，所以工具描述会提醒模型每个任务只加载一次。默认关闭：这两个工具会出现在每次请求里，并且让模型不经 `/rea` 就能自行扩大可见范围。
 
-恢复会话时，`/rea on|add|off` 与每一次成功的 `rea_load`/`rea_unload` 会按顺序重放，所以会话回来时类别与结束时完全一致。
+恢复会话时，`/rea on|add|off` 与每一次成功的 `rea_load`/`rea_unload` 会按顺序重放，所以会话回来时类别与结束时一致。单独的 `/rea`（以及关键词解锁）在记录里不带具体类别，重放时按当前的 `defaultCategories`（`keywordCategories`）计算：改了这些设置后，恢复的会话会跟随新值。
 
 Windows 上做 native 分析的推荐配置（REA 的抓包/信号工具只支持 Linux）：
 
@@ -93,12 +93,12 @@ Windows 上做 native 分析的推荐配置（REA 的抓包/信号工具只支�
 
 ## 保留什么
 
-- **207 个原版工具，一个不删**：反编译、交叉引用、字符串搜索、Android/ADB、托管代码、JavaScript/Electron、运行时分析等。取消自行设计的 entry/navigate/analyze 档位。
+- **229 个原版工具，一个不删**：反编译、交叉引用、字符串搜索、Android/ADB、托管代码、JavaScript/Electron、运行时分析等。取消自行设计的 entry/navigate/analyze 档位。
 - 原版输入 schema、参数和描述；DSH 公共名称为 `mcp__rea__<原工具名>`。
 - 使用 DSH 官方 `@deepseek-ai/dsh-mcp-client` 处理目录分页、目录变化、取消、生命周期、输出校验和附件投影，避免自行写一套不完整桥接。
 - 原版 `reverse-engineer-anything` Skill、上游 tool_count 元数据及全部六篇 references。直接从固定依赖中注册，并指定其资源目录；不覆盖 Codex 或用户自己的技能。
 - 运行原版有状态 MCP 进程，保留完整 Evidence 的 content 和 structuredContent，不缩减结果、不重新生成证据 ID。
-- **六个原版 MCP prompts、25 个参数及原版动态补全**从输入框的 `/` 菜单进入，与 207 个工具**共用同一个 REA Client、进程与分析会话**。
+- **六个原版 MCP prompts、25 个参数及原版动态补全**从输入框的 `/` 菜单进入，与 229 个工具**共用同一个 REA Client、进程与分析会话**。
 
 REA 是固定版本的 npm 依赖，不是改写分析引擎。外部引擎、设备、商业授权要求与原版相同。
 
@@ -121,11 +121,13 @@ REA 是固定版本的 npm 依赖，不是改写分析引擎。外部引擎、�
 
 ## 安装
 
-尚未发布 npm，请在 DSH 插件管理器中从仓库安装：
+本包**未发布到 npm**——npm 上的 `dsh-rea` 是另一个无关的同名适配器。请安装 GitHub Release 的 tarball，这正对应插件市场的 `github:` 来源格式：
 
 ```text
-github:JeremyWangCY/dsh-rea
+https://github.com/JeremyWangCY/dsh-rea/releases/download/v0.5.0/dsh-rea-0.5.0.tgz
 ```
+
+必须使用 Release 资产（市场解析的是 `releases/download/<tag>/<name>-<version>.tgz` 这种 URL）。每个 Release 的说明里写明所固定的 `rea-agents` 版本。`@deepseek-ai/dsh-*` 是 peerDependencies，由 DSH 宿主提供，不由本包安装。
 
 本地开发可通过插件管理器安装此源码目录的绝对路径。必须安装到**当前活动 profile**；使用 Web 界面不一定代表 `web` profile，桌面版也承载同一界面。
 
@@ -150,9 +152,9 @@ github:JeremyWangCY/dsh-rea
 | keywordUnlock | false | 是否额外允许“真实用户消息命中逆向关键词”自动解锁。默认关闭，见上文原因 |
 | defaultCategories | [all] | 单独的 `/rea` 或 `/rea <请求>` 揭示哪些类别。`all` 保持整套目录的行为；未知 id 会让激活失败 |
 | keywordCategories | [native] | 关键词解锁揭示哪些类别（仅在开启 `keywordUnlock` 时） |
-| modelLoader | true | 给模型注册 `rea_load` / `rea_unload`（仅 lazy 模式） |
+| modelLoader | false | 给模型注册 `rea_load` / `rea_unload`（仅 lazy 模式） |
 | loaderMaxPerCall | 3 | 一次 `rea_load` 最多新增几个类别 |
-| alwaysDeny | [] | 任何人都不能揭示的类别，即使用 `all` 也不行（例如 Windows 上的 `[capture]`） |
+| alwaysDeny | [] | 任何人都不能揭示的类别，即使用 `all` 也不行（例如 Windows 上的 `[capture]`）。仅 lazy 模式有效；`exposure: always` 时激活会记录一条警告，不做任何屏蔽 |
 | serverName | rea | 官方桥接命名空间 |
 | tools | all | 兼容标记；不再支持删减子集 |
 | nodeCommand | 空 | 默认宿主可执行文件；Electron 加 ELECTRON_RUN_AS_NODE=1；必要时指定独立 Node |
@@ -197,7 +199,7 @@ Ghidra、JDK、JADX 与 WABT 的版本由 `test/toolchain.test.mjs` 针对**已�
 
 | 方式 | 模型侧工具 JSON | 额外 SDK 提示文本 |
 |---|---:|---:|
-| native，207 个 | 775,022 字节 | 0 |
+| native，229 个 | 273,264 字节 | 0 |
 | PTC，仅 run_code | 944 字节 | 86,633 字节 |
 
 这是**字节测量，不是 tokenizer 计数**。v0.1 中“54 万输入 tokens”的说法错把返回结果 schema 算成模型输入，已经撤回。PTC 不是零上下文；SDK 仍进入提示词。worker 默认墙钟上限 600 秒、计算时间 60 秒、输出 64MiB；只有 return/print 的值进入外层结果，需要完整证据时应完整返回。两种方式保持工具返回内容，但模型使用的接口不同，不能声称回答质量完全一致。
@@ -206,7 +208,7 @@ Ghidra、JDK、JADX 与 WABT 的版本由 `test/toolchain.test.mjs` 针对**已�
 
 ## 已验证与未验证
 
-`verify/integration.mjs` 运行真实 Cordis ToolRuntime、原版 MCP 和 DSH worker-thread PTC，对返回结果逐字段深比较。覆盖：全部名称/描述/输入 schema、原版 Skill、六个原版 prompt 的元数据与渲染消息、一次原版 provider completion、JS 分析及数据流追踪、同会话 retained-reference 视图、证据包列表、含一条记录的离线 HAR、含文件的 ZIP 打开/检查/关闭、原版错误、调用前取消、卸载清理、启动失败明确报告。`test/client.test.mjs` 用最小 React/DOM 环境加载**真实浏览器 bundle** 并驱动真正的 `/` 源：空闲时槽位渲染 null 且不发任何请求、源注册、候选过滤、`handled` 选中不改动草稿、必填参数门控、补全请求载荷、预览原文、仅通过 `setDraft` 插入且保留原草稿、错误提示，以及升级后未重启的重启提示。`verify/connection.mjs` 挂载**已安装的** `WebServer` + `Connection` 并走真实线路：无浏览器会话为 401，随后 `prompts/list`/`get`/`complete` 与直连 MCP 深度相等，另验证信封、content-type、Host 信任栅栏与卸载。`test/gate.test.mjs` 覆盖按 agent 掩码、重新同步、恢复会话与“关键词默认不解锁”的策略；`test/command.test.mjs` 覆盖 `/rea` 的指令解析、转发、类别指令与带大小的状态；`test/categories.test.mjs` 启动已安装的 REA，任何工具落在命名类别之外即失败；`test/loader.test.mjs` 覆盖 `rea_load`/`rea_unload`；`verify/lazy-exposure.mjs` 挂载真实 `dsh-system-prompt`/`dsh-tools`/`dsh-skill`，实测被门控 agent 的组装里 REA schema 为零、而桥接仍保留完整世代。`pnpm test` 共 160 项单元/面板测试，`pnpm verify` 为 35 项差分校验，`pnpm verify:lazy` 为 10 项按需加载校验（含经真实命令服务的部分揭示）。需先用受支持 Node 和 pnpm 安装依赖；可选环境变量 `DSH_REA_TEST_MODULE_ROOT` 指向已安装 DSH 的模块根目录，以测试那个 Host 的精确服务版本，默认用本项目测试依赖。结果见源码中的 `verification/integration-report.json`。
+`verify/integration.mjs` 运行真实 Cordis ToolRuntime、原版 MCP 和 DSH worker-thread PTC，对返回结果逐字段深比较。覆盖：全部名称/描述/输入 schema、原版 Skill、六个原版 prompt 的元数据与渲染消息、一次原版 provider completion、JS 分析及数据流追踪、同会话 retained-reference 视图、证据包列表、含一条记录的离线 HAR、含文件的 ZIP 打开/检查/关闭、原版错误、调用前取消、卸载清理、启动失败明确报告。`test/client.test.mjs` 用最小 React/DOM 环境加载**真实浏览器 bundle** 并驱动真正的 `/` 源：空闲时槽位渲染 null 且不发任何请求、源注册、候选过滤、`handled` 选中不改动草稿、必填参数门控、补全请求载荷、预览原文、仅通过 `setDraft` 插入且保留原草稿、错误提示，以及升级后未重启的重启提示。`verify/connection.mjs` 挂载**已安装的** `WebServer` + `Connection` 并走真实线路：无浏览器会话为 401，随后 `prompts/list`/`get`/`complete` 与直连 MCP 深度相等，另验证信封、content-type、Host 信任栅栏与卸载。`test/gate.test.mjs` 覆盖按 agent 掩码、重新同步、恢复会话与“关键词默认不解锁”的策略；`test/command.test.mjs` 覆盖 `/rea` 的指令解析、转发、类别指令与带大小的状态；`test/categories.test.mjs` 启动已安装的 REA，任何工具落在命名类别之外即失败；`test/loader.test.mjs` 覆盖 `rea_load`/`rea_unload`；`verify/lazy-exposure.mjs` 挂载真实 `dsh-system-prompt`/`dsh-tools`/`dsh-skill`，实测被门控 agent 的组装里 REA schema 为零、而桥接仍保留完整世代。`pnpm test` 共 166 项单元/面板测试，`pnpm verify` 为 35 项差分校验，`pnpm verify:lazy` 为 10 项按需加载校验（含经真实命令服务的部分揭示）。需先用受支持 Node 和 pnpm 安装依赖；可选环境变量 `DSH_REA_TEST_MODULE_ROOT` 指向已安装 DSH 的模块根目录，以测试那个 Host 的精确服务版本，默认用本项目测试依赖。结果见源码中的 `verification/integration-report.json`。
 
 **未声称**：全部操作实际执行；IDA/Ghidra/Hopper/JEB/ADB/浏览器捕获已验证；耗时操作中途取消已验证；LLM 回答完全相同；所有模型 provider 都接受全量 schema；所有外部 provider 的补全项都被穷尽测试。外部引擎须另做具体任务测试。
 
